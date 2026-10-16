@@ -39,7 +39,9 @@ export class CiRoleStack extends Stack {
       maxSessionDuration: Duration.hours(1),
       assumedBy: new iam.WebIdentityPrincipal(providerArn, {
         StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
-        // Without a sub condition, any GitHub repository could assume this role.
+        // IAM refuses a GitHub trust policy without a sub condition, or with one that is only
+        // a wildcard. A loose value such as repo:<org>/* would still pass, so scope it to one
+        // repository's main branch and pull requests.
         StringLike: {
           'token.actions.githubusercontent.com:sub': [
             `repo:${props.githubRepo}:ref:refs/heads/main`,

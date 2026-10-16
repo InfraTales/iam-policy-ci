@@ -13,7 +13,7 @@ The app itself is small on purpose. One AWS Lambda function exports a day of ord
 | Check | What it catches | Needs AWS? | Cost |
 |---|---|---|---|
 | cdk-nag (AWS Solutions pack) on every synth | Wildcard actions and resources, AWS managed policies, missing TLS and other known bad patterns | No | Free |
-| `policy-check --dry-run` | A role with no reference policy, an AWS managed policy we can't see, a policy we can't read | No | Free |
+| `policy-check --dry-run` | A role with no reference policy, a role that grants an action its reference doesn't list, an AWS managed policy we can't see, a policy we can't read | No | Free |
 | `ValidatePolicy` | Policy grammar errors and over-broad grants (findings of type ERROR or SECURITY_WARNING fail the build) | Yes | No charge |
 | `CheckNoNewAccess` | A role that can do more than its reference policy in `policy-check/reference/` | Yes | $0.002 per call |
 | `CheckAccessNotGranted` | Any role that can call an action on the never-grant list, such as `iam:PassRole` | Yes | $0.002 per call |
@@ -38,6 +38,7 @@ npm ci
 npm run check                      # type check, lint, tests, synth with cdk-nag, dry run
 docker run -d --rm -p 8024:8000 amazon/dynamodb-local:3.3.2
 AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8024 npm run test:int
+AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8024 npm run mutate   # break each safeguard, expect a test to fail
 ```
 
 To run the real checks you need AWS credentials allowed to call the four Access Analyzer actions:
@@ -51,7 +52,7 @@ Exit code 0 means every check passed, 1 means a check failed, and 2 means the to
 
 ## Turn on the real check in CI
 
-The `access-analyzer` job in `.github/workflows/ci.yml` does a dry run until you give it an AWS role. [docs/runbook.md](docs/runbook.md) walks through deploying the `IamPolicyCi-CiRole` stack and setting the `POLICY_CHECK_ROLE_ARN` repository variable. A pull request from a fork gets the dry run, because GitHub doesn't give fork workflows an OIDC token.
+The `access-analyzer` job in `.github/workflows/ci.yml` does a dry run until you give it an AWS role. It doesn't wait for the `check` job, and it synthesizes with `-c nag=false` (`npm run synth:no-nag`), so a change that cdk-nag rejects still gets an Access Analyzer verdict. The `check` job keeps cdk-nag on. [docs/runbook.md](docs/runbook.md) walks through deploying the `IamPolicyCi-CiRole` stack and setting the `POLICY_CHECK_ROLE_ARN` repository variable. A pull request from a fork gets the dry run, because GitHub doesn't give fork workflows an OIDC token.
 
 ## Widening a role on purpose
 

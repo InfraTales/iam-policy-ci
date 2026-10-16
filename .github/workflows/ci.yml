@@ -34,9 +34,9 @@ jobs:
       - run: npm run check
 
   dynamodb-local:
-    # The real handler against DynamoDB Local.
+    # The real handler against DynamoDB Local, then the mutation check (it needs DynamoDB Local too).
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     services:
       dynamodb:
         image: amazon/dynamodb-local:3.3.2
@@ -54,14 +54,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:int
+      # Break each safeguard once and check that a test notices.
+      - run: npm run mutate
 
   access-analyzer:
     # Sends every policy in the synthesized app to IAM Access Analyzer. It needs an AWS
     # role (see docs/runbook.md). Without the POLICY_CHECK_ROLE_ARN repository variable,
     # or on a pull request from a fork, it does a dry run instead.
+    # It doesn't wait for the check job, and it synthesizes without cdk-nag, so a change
+    # that cdk-nag or a unit test rejects still gets an Access Analyzer verdict.
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: check
     permissions:
       contents: read
       id-token: write # lets the job ask GitHub for an OIDC token to assume the AWS role
@@ -76,7 +79,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run synth
+      - run: npm run synth:no-nag
       - if: env.REAL_RUN == 'true'
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:

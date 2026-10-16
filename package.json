@@ -14,10 +14,12 @@
     "test": "npm run bundle && jest",
     "test:int": "npm run bundle && jest -c jest.integration.config.js",
     "synth": "npm run bundle && cdk synth --quiet",
+    "synth:no-nag": "npm run bundle && cdk synth --quiet -c nag=false",
     "check": "npm run build && npm run lint && npm test && npm run synth && npm run policy-check -- --dry-run",
     "policy-check": "ts-node policy-check/cli.ts",
     "deploy": "npm run bundle && cdk deploy --all",
-    "destroy": "cdk destroy --all"
+    "destroy": "cdk destroy --all",
+    "mutate": "ts-node scripts/mutation-check.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1152.0",

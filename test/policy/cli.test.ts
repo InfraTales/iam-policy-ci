@@ -96,6 +96,14 @@ describe('adding s3:* to the function role', () => {
     expect(out).toContain('statement "Oops"');
   });
 
+  test('a dry run fails it offline, with no AWS call, because the reference has no s3:*', async () => {
+    const { code, out } = await run(broken.dir, ['--dry-run']);
+    expect(code).toBe(1);
+    expect(aa.calls()).toHaveLength(0);
+    expect(out).toMatch(/FAIL ActionsInReference IamPolicyCi-Export\/ExportFunctionRole/);
+    expect(out).toContain('statement "Oops" grants s3:*, which export-function.json doesn\'t allow');
+  });
+
   test('cdk-nag catches it too, as AwsSolutions-IAM5', () => {
     expect(broken.nagViolations.join('\n')).toContain('AwsSolutions-IAM5[Action::s3:*]');
   });
@@ -110,6 +118,12 @@ describe('adding s3:DeleteObject on exports/*, with no new wildcard', () => {
 
   test('cdk-nag says nothing, because the wildcard on exports/* is already acknowledged', () => {
     expect(broken.nagViolations).toEqual([]);
+  });
+
+  test('the offline action check fails it too, even though cdk-nag passes', async () => {
+    const { code, out } = await run(broken.dir, ['--dry-run']);
+    expect(code).toBe(1);
+    expect(out).toContain('statement "Cleanup" grants s3:DeleteObject');
   });
 
   test('the new action still reaches CheckNoNewAccess', async () => {
@@ -232,6 +246,8 @@ test('a dry run makes no AWS calls', async () => {
   expect(code).toBe(0);
   expect(aa.calls()).toHaveLength(0);
   expect(out).toContain('12 API calls planned, 7 of them billed custom checks');
+  expect(out).toMatch(/PASS ActionsInReference IamPolicyCi-Export\/ExportFunctionRole/);
+  expect(out).toMatch(/PASS ActionsInReference IamPolicyCi-CiRole\/PolicyCheckRole/);
 });
 
 test('a missing cloud assembly is a tool error', async () => {
