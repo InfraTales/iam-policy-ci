@@ -13,4 +13,9 @@ new CiRoleStack(app, 'IamPolicyCi-CiRole', {
 });
 
 // cdk-nag runs on every synth. A finding without a written acknowledgement fails `cdk synth`.
-Validations.of(app).addPlugins(new AwsSolutionsChecks(app, { verbose: true }));
+// The access-analyzer CI job synthesizes with `-c nag=false`, so a change cdk-nag rejects
+// still reaches Access Analyzer instead of stopping at synth. The check job keeps cdk-nag on.
+const nag: unknown = app.node.tryGetContext('nag');
+if (nag !== false && nag !== 'false') {
+  Validations.of(app).addPlugins(new AwsSolutionsChecks(app, { verbose: true }));
+}

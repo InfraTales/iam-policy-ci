@@ -28,6 +28,7 @@
 | `FAIL CheckNoPublicAccess <policy>` | A resource or trust policy grants public access | Add a condition or a specific principal |
 | `FAIL ValidatePolicy` with `SECURITY_WARNING` or `ERROR` | A grammar problem or an over-broad grant | Fix the policy. To accept a finding, add it to `ignoredFindings` with a reason |
 | `FAIL ReferenceExists <role>` | A new role has no reference policy | Add a reference file and map it in `policy-check/config.ts` |
+| `FAIL ActionsInReference <role>` | The role grants an action its reference file doesn't list (checked offline, actions only) | Remove the action, or add it to the reference file in the same pull request |
 | `ERROR ...` and exit code 2 | The tool couldn't run: no credentials, throttling, or a template it can't read | Read the message. The run never passes on an error |
 
 ## Deploy and remove the demo app

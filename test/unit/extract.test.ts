@@ -76,6 +76,19 @@ describe('templates written by hand', () => {
     expect(() => extractTemplate('S', template)).toThrow(/isn't a Ref/);
   });
 
+  test('a policy whose Roles entry points at something other than a role, user or group fails', () => {
+    const template: CfnTemplate = {
+      Resources: {
+        Bucket: { Type: 'AWS::S3::Bucket', Properties: {} },
+        P: {
+          Type: 'AWS::IAM::Policy',
+          Properties: { PolicyDocument: { Statement: [{ Effect: 'Allow', Action: 's3:GetObject', Resource: '*' }] }, Roles: [{ Ref: 'Bucket' }] },
+        },
+      },
+    };
+    expect(() => extractTemplate('S', template)).toThrow(/attaches to Bucket, which isn't a role, user or group in S/);
+  });
+
   test('queue, topic, key and secret policies are found; Lambda permissions are listed as not checked', () => {
     const doc = { Statement: [{ Effect: 'Allow', Principal: { AWS: 'arn:aws:iam::123456789012:root' }, Action: '*', Resource: '*' }] };
     const template: CfnTemplate = {

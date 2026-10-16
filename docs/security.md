@@ -25,7 +25,7 @@ GitHub Actions assumes `PolicyCheckRole` with OpenID Connect (OIDC), so no long-
 - `aud` must be `sts.amazonaws.com`.
 - `sub` must be `repo:<owner>/<name>:ref:refs/heads/main` or `repo:<owner>/<name>:pull_request`.
 
-Without the `sub` condition, a workflow in any GitHub repository could assume the role. The role's only permission is the four Access Analyzer actions. Those actions have no resource types, so `"Resource": "*"` is the only value IAM accepts for them. Sessions last at most one hour.
+IAM refuses to create or update a GitHub trust policy unless it has a `sub` condition whose value isn't only a wildcard. A loose value such as `repo:<org>/*` still passes that check, so the role names one repository's `main` branch and its pull requests. The role's only permission is the four Access Analyzer actions. Those actions have no resource types, so `"Resource": "*"` is the only value IAM accepts for them. Sessions last at most one hour.
 
 ## What the policy check doesn't cover
 

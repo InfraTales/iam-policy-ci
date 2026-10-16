@@ -20,12 +20,13 @@ export type CheckName =
   | 'CheckAccessNotGranted'
   | 'CheckNoPublicAccess'
   | 'ReferenceExists'
+  | 'ActionsInReference'
   | 'ManagedPolicyAllowList';
 
 export type PolicyType = 'IDENTITY_POLICY' | 'RESOURCE_POLICY';
 
 export interface PlannedCheck {
-  check: Exclude<CheckName, 'ReferenceExists' | 'ManagedPolicyAllowList'>;
+  check: Exclude<CheckName, 'ReferenceExists' | 'ActionsInReference' | 'ManagedPolicyAllowList'>;
   target: string;
   policyType: PolicyType;
   document: PolicyDocument;
@@ -58,9 +59,9 @@ export function loadReference(dir: string, file: string): PolicyDocument {
 }
 
 /**
- * Works out which API calls to make. Also runs the two checks that need no API:
- * every principal has a reference policy, and no principal attaches a managed policy
- * we can't see.
+ * Works out which API calls to make. Also runs the checks that need no API: every
+ * principal has a reference policy, grants no action its reference leaves out, and
+ * attaches no managed policy we can't see.
  */
 export function planChecks(
   extraction: Extraction,
@@ -95,13 +96,21 @@ export function planChecks(
       });
     } else {
       local.push({ check: 'ReferenceExists', target, status: 'PASS', messages: [rule.reference] });
+      const reference = loadReference(referenceDir, rule.reference);
+      const extra = actionsOutsideReference(p.merged, reference);
+      local.push({
+        check: 'ActionsInReference',
+        target,
+        status: extra.length === 0 ? 'PASS' : 'FAIL',
+        messages: extra.map((e) => `${e}, which ${rule.reference} doesn't allow`),
+      });
       if (p.merged.Statement.length > 0) {
         planned.push({
           check: 'CheckNoNewAccess',
           target,
           policyType: 'IDENTITY_POLICY',
           document: p.merged,
-          reference: { file: rule.reference, document: loadReference(referenceDir, rule.reference) },
+          reference: { file: rule.reference, document: reference },
         });
       }
     }
@@ -140,6 +149,35 @@ export function planChecks(
   }
 
   return { planned, local };
+}
+
+const asList = (v: unknown): string[] => (v === undefined ? [] : [v].flat().map(String));
+
+/** IAM action globs: case-insensitive, * for any run of characters, ? for one. */
+function actionGlob(pattern: string): RegExp {
+  const body = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+  return new RegExp(`^${body}$`, 'i');
+}
+
+/**
+ * Offline, action-level comparison with the reference: every action an Allow statement
+ * grants must match an action the reference allows. A wildcard action like `s3:*` only
+ * passes if the reference allows that same wildcard or a wider one. Resources aren't
+ * compared here; CheckNoNewAccess does that with AWS. NotAction can't be compared
+ * offline, so it fails.
+ */
+export function actionsOutsideReference(policy: PolicyDocument, reference: PolicyDocument): string[] {
+  const allowed = reference.Statement.filter((st) => st.Effect === 'Allow').flatMap((st) => asList(st.Action)).map(actionGlob);
+  const out: string[] = [];
+  policy.Statement.forEach((st, i) => {
+    if (st.Effect !== 'Allow') return;
+    const where = typeof st.Sid === 'string' && st.Sid !== '' ? `statement "${st.Sid}"` : `statement ${i}`;
+    if (st.NotAction !== undefined) out.push(`${where} uses NotAction, which can't be compared offline`);
+    for (const action of asList(st.Action)) {
+      if (!allowed.some((g) => g.test(action))) out.push(`${where} grants ${action}`);
+    }
+  });
+  return out;
 }
 
 function reasonsText(reasons: ReasonSummary[] | undefined): string[] {
