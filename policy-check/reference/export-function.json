@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "WriteOwnLogs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:*:123456789012:log-group:ExportFunctionLogs*"
+    },
+    {
+      "Sid": "QueryOrders",
+      "Effect": "Allow",
+      "Action": "dynamodb:Query",
+      "Resource": "arn:aws:dynamodb:*:123456789012:table/OrdersTable*"
+    },
+    {
+      "Sid": "WriteExports",
+      "Effect": "Allow",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::exportbucket*/exports/*"
+    }
+  ]
+}

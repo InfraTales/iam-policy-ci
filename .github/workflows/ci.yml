@@ -1,0 +1,90 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the run that's now out of date.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Actions are pinned to commit SHAs. Dependabot keeps them current.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Fail on known high or critical vulnerabilities in code that ships to Lambda.
+      - run: npm audit --omit=dev --audit-level=high
+      # Type check, lint, bundle, unit + policy + infra tests, synth with cdk-nag,
+      # then a dry run of the policy check (no AWS calls).
+      - run: npm run check
+
+  dynamodb-local:
+    # The real handler against DynamoDB Local.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:3.3.2
+        ports:
+          - 8000:8000
+    env:
+      AWS_ENDPOINT_URL_DYNAMODB: http://localhost:8000
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:int
+
+  access-analyzer:
+    # Sends every policy in the synthesized app to IAM Access Analyzer. It needs an AWS
+    # role (see docs/runbook.md). Without the POLICY_CHECK_ROLE_ARN repository variable,
+    # or on a pull request from a fork, it does a dry run instead.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: check
+    permissions:
+      contents: read
+      id-token: write # lets the job ask GitHub for an OIDC token to assume the AWS role
+    env:
+      REAL_RUN: ${{ vars.POLICY_CHECK_ROLE_ARN != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run synth
+      - if: env.REAL_RUN == 'true'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.POLICY_CHECK_ROLE_ARN }}
+          aws-region: ${{ vars.POLICY_CHECK_REGION || 'us-east-1' }}
+      - if: env.REAL_RUN == 'true'
+        run: npm run policy-check -- --report policy-report.json
+      - if: env.REAL_RUN != 'true'
+        run: |
+          echo "::notice::POLICY_CHECK_ROLE_ARN is not set or this is a fork. Running the policy check as a dry run."
+          npm run policy-check -- --dry-run

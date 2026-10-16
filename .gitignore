@@ -1,0 +1,11 @@
+node_modules/
+cdk.out/
+build/
+coverage/
+policy-report.json
+*.js
+!jest.config.js
+!jest.integration.config.js
+*.d.ts
+.env
+.DS_Store
