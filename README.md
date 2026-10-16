@@ -4,6 +4,10 @@ This repo checks every IAM policy in an AWS Cloud Development Kit (CDK) app with
 
 The app itself is small on purpose. One AWS Lambda function exports a day of orders from Amazon DynamoDB to a JSON file in Amazon S3. Its role can run `dynamodb:Query` on one table and `s3:PutObject` under `exports/` in one bucket, and write its own logs. A test checks that the handler calls exactly those actions.
 
+## Architecture
+
+![GitHub Actions sends every policy to IAM Access Analyzer via an OIDC role. A failed check fails CI.](docs/architecture.png)
+
 ## What runs where
 
 | Check | What it catches | Needs AWS? | Cost |
